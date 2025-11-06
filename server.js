@@ -5,10 +5,8 @@ require('dotenv').config();
 const app = express();
 app.use(express.json());
 
-// Simple in-memory business storage (for demo)
 const businesses = new Map();
 
-// Set up business on startup
 async function setupBusiness() {
   try {
     const serviceKey = JSON.parse(process.env.SERVICE_ACCOUNT_KEY);
@@ -16,7 +14,7 @@ async function setupBusiness() {
       name: 'Dollar Shop Hot Pot',
       calendar_id: process.env.GOOGLE_CALENDAR_ID,
       service_account_key: serviceKey,
-      timezone: 'America/New_York',
+      timezone: 'America/Vancouver',
       duration: 90,
       hours_start: 11,
       hours_end: 22
@@ -29,7 +27,6 @@ async function setupBusiness() {
 
 setupBusiness();
 
-// Create Google Calendar client
 async function getCalendar(serviceAccountKey) {
   const auth = new google.auth.GoogleAuth({
     credentials: serviceAccountKey,
@@ -38,9 +35,7 @@ async function getCalendar(serviceAccountKey) {
   return google.calendar({ version: 'v3', auth });
 }
 
-// Check availability
 async function checkAvailability(calendar, calendarId, date, time, duration) {
-  const [h, m] = time.split(':');
   const start = new Date(`${date}T${time}`);
   const end = new Date(start);
   end.setMinutes(end.getMinutes() + duration);
@@ -58,19 +53,20 @@ async function checkAvailability(calendar, calendarId, date, time, duration) {
   }
 }
 
-// Main webhook
 app.post('/webhook/send_reservation_info', async (req, res) => {
   try {
-    const { business_id, name, date, time, party_size, phone_number } = req.body;
+    const { customer_name, date, time, party_size, phone_number, special_requests, business_id } = req.body;
 
-    if (!business_id || !name || !date || !time || !party_size || !phone_number) {
+    console.log('📞 Reservation request:', { customer_name, date, time, party_size });
+
+    if (!customer_name || !date || !time || !party_size || !phone_number) {
       return res.json({
         success: false,
-        message: 'Missing information. Please provide all details.'
+        message: 'Missing required information.'
       });
     }
 
-    const business = businesses.get(business_id);
+    const business = businesses.get(business_id || 'dollar-shop');
     if (!business) {
       return res.json({
         success: false,
@@ -78,10 +74,7 @@ app.post('/webhook/send_reservation_info', async (req, res) => {
       });
     }
 
-    // Get calendar client
     const calendar = await getCalendar(business.service_account_key);
-
-    // Check availability
     const available = await checkAvailability(
       calendar,
       business.calendar_id,
@@ -93,12 +86,10 @@ app.post('/webhook/send_reservation_info', async (req, res) => {
     if (!available) {
       return res.json({
         success: false,
-        message: 'That time slot is not available. Please try another time.',
-        suggested_action: 'ask_alternative_time'
+        message: 'unavailable'
       });
     }
 
-    // Create calendar event
     const endTime = new Date(`${date}T${time}`);
     endTime.setMinutes(endTime.getMinutes() + business.duration);
 
@@ -106,8 +97,8 @@ app.post('/webhook/send_reservation_info', async (req, res) => {
       await calendar.events.insert({
         calendarId: business.calendar_id,
         resource: {
-          summary: `Reservation: ${name} (${party_size} people)`,
-          description: `Phone: ${phone_number}\nParty Size: ${party_size}`,
+          summary: `Reservation: ${customer_name} (${party_size} people)`,
+          description: `Phone: ${phone_number}\nParty Size: ${party_size}${special_requests ? '\nSpecial Requests: ' + special_requests : ''}`,
           start: {
             dateTime: new Date(`${date}T${time}`).toISOString(),
             timeZone: business.timezone,
@@ -118,26 +109,27 @@ app.post('/webhook/send_reservation_info', async (req, res) => {
           },
         },
       });
+      console.log('✅ Event created for', customer_name);
     } catch (e) {
       console.error('Event creation error:', e.message);
     }
 
     res.json({
       success: true,
-      message: `Perfect! Your reservation is confirmed for ${name} at ${time} on ${date}. We look forward to serving your party of ${party_size}!`
+      message: `Perfect! Reservation confirmed for ${customer_name} at ${time} on ${date}.`
     });
 
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Reservation error:', error);
     res.json({
       success: false,
-      message: 'Something went wrong. Please try again.'
+      message: 'Something went wrong.'
     });
   }
 });
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'healthy', businesses: Array.from(businesses.keys()) });
+  res.json({ status: 'healthy' });
 });
 
 const PORT = process.env.PORT || 3000;
