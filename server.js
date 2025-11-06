@@ -59,7 +59,7 @@ async function checkAvailability(calendar, calendarId, date, time, duration) {
 }
 
 // Main webhook
-app.post('/webhook/reservation', async (req, res) => {
+app.post('/webhook/send_reservation_info', async (req, res) => {
   try {
     const { business_id, name, date, time, party_size, phone_number } = req.body;
 
