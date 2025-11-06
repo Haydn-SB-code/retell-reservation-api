@@ -11,20 +11,6 @@
     "dotenv": "^16.3.1"
   }
 }
-```
 
-4. Click **"Commit new file"**
 
----
 
-## Add File 3: .env
-
-1. Click **"Add file"** → **"Create new file"**
-
-2. **Name it `.env`**
-
-3. **Paste (but replace the values):**
-```
-SERVICE_ACCOUNT_KEY=PASTE_YOUR_JSON_KEY_CONTENT_HERE
-GOOGLE_CALENDAR_ID=YOUR_CALENDAR_ID@group.calendar.google.com
-PORT=3000
